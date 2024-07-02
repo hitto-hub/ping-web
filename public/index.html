@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ping Test</title>
+    <style>
+        .window {
+            display: inline-block;
+            width: 60px;
+            height: 60px;
+            margin: 5px;
+            border: 1px solid #000;
+            text-align: center;
+            vertical-align: top;
+            font-size: 12px;
+            position: relative;
+            line-height: 60px;
+            cursor: pointer;
+        }
+
+        .window.online {
+            background-color: #98FB98;
+            /* PaleGreenっていうらしい */
+        }
+
+        .window.offline {
+            background-color: #FFB6C1;
+            /* LightPinkっていうらしい */
+        }
+
+        .timestamp {
+            font-size: 14px;
+            color: #333;
+        }
+
+        .popup {
+            display: none;
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            border: 1px solid #000;
+            background-color: #fff;
+            z-index: 1000;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .memo-icon {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 12px;
+            height: 12px;
+            background-color: yellow;
+            border-radius: 50%;
+            display: none;
+        }
+
+        .window.has-memo .memo-icon {
+            display: block;
+        }
+
+        .error {
+            color: red;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Ping Test</h1>
+    <form id="pingForm">
+        <label for="network">Enter Network Address (e.g., 192.168.0.0):</label>
+        <input type="text" id="network" name="network" required>
+        <label for="subnet">Enter Subnet Mask (e.g., /24):</label>
+        <input type="text" id="subnet" name="subnet" required>
+        <button type="submit">Ping</button>
+    </form>
+    <button id="startButton">Start Regular Ping</button>
+    <button id="stopButton" disabled>Stop Regular Ping</button>
+    <button id="exportButton">Export Data</button>
+    <input type="file" id="importFile" style="display:none;">
+    <button id="importButton">Import Data</button>
+    <button id="resetCookiesButton">Reset Cookies</button>
+    <h2>Results</h2>
+    <div id="lastChecked" class="timestamp"></div>
+    <div id="loading" class="loading" style="display: none;">Pinging, please wait...</div>
+    <div id="error" class="error"></div>
+    <div id="resultsContainer"></div>
+
+    <div class="overlay" id="overlay"></div>
+    <div class="popup" id="popup">
+        <h3>Memo for <span id="popupHost"></span></h3>
+        <textarea id="memo" rows="4" cols="50"></textarea><br>
+        <button id="saveMemoButton">Save Memo</button>
+        <button id="closePopupButton">Close</button>
+    </div>
+
+    <script>
+        let intervalId;
+        const memos = {};
+
+        document.getElementById('pingForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await performPing();
+            saveDataToCookies();
+        });
+
+        document.getElementById('startButton').addEventListener('click', () => {
+            const interval = prompt('Enter the interval in seconds:', '60');
+            if (interval && !isNaN(interval) && interval > 0) {
+                intervalId = setInterval(performPing, interval * 1000);
+                document.getElementById('startButton').disabled = true;
+                document.getElementById('stopButton').disabled = false;
+            }
+        });
+
+        document.getElementById('stopButton').addEventListener('click', () => {
+            clearInterval(intervalId);
+            document.getElementById('startButton').disabled = false;
+            document.getElementById('stopButton').disabled = true;
+        });
+
+        document.getElementById('exportButton').addEventListener('click', () => {
+            const data = {
+                network: document.getElementById('network').value,
+                subnet: document.getElementById('subnet').value,
+                memos: memos
+            };
+            const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ping_data.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        });
+
+        document.getElementById('importButton').addEventListener('click', () => {
+            document.getElementById('importFile').click();
+        });
+
+        document.getElementById('importFile').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                document.getElementById('network').value = data.network;
+                document.getElementById('subnet').value = data.subnet;
+                Object.assign(memos, data.memos);
+                await performPing();
+                saveDataToCookies();
+            }
+        });
+
+        document.getElementById('resetCookiesButton').addEventListener('click', () => {
+            resetCookies();
+            document.getElementById('network').value = '';
+            document.getElementById('subnet').value = '';
+            Object.keys(memos).forEach(key => delete memos[key]);
+            document.getElementById('resultsContainer').innerHTML = '';
+        });
+
+        function saveDataToCookies() {
+            const data = {
+                network: document.getElementById('network').value,
+                subnet: document.getElementById('subnet').value,
+                memos: memos
+            };
+            document.cookie = `pingData=${encodeURIComponent(JSON.stringify(data))}; path=/; max-age=31536000`; // 1 year
+        }
+
+        function loadDataFromCookies() {
+            const cookies = document.cookie.split(';');
+            for (let cookie of cookies) {
+                const [name, value] = cookie.split('=').map(c => c.trim());
+                if (name === 'pingData') {
+                    const data = JSON.parse(decodeURIComponent(value));
+                    document.getElementById('network').value = data.network;
+                    document.getElementById('subnet').value = data.subnet;
+                    Object.assign(memos, data.memos);
+                    break;
+                }
+            }
+        }
+
+        function resetCookies() {
+            document.cookie = 'pingData=; path=/; max-age=0';
+        }
+
+        async function performPing() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('error').textContent = '';
+            const network = document.getElementById('network').value;
+            const subnet = document.getElementById('subnet').value;
+            try {
+                const response = await fetch('/ping', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ network, subnet })
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error);
+                }
+                const results = await response.json();
+                const resultsContainer = document.getElementById('resultsContainer');
+                resultsContainer.innerHTML = '';
+                const networkPrefix = network.split('.').slice(0, 3).join('.') + '.';
+                results.forEach(result => {
+                    const windowDiv = document.createElement('div');
+                    windowDiv.className = 'window ' + (result.status.toLowerCase());
+                    const hostPart = result.ip.replace(networkPrefix, '');
+                    if (memos[result.ip]) {
+                        windowDiv.classList.add('has-memo');
+                    }
+                    windowDiv.innerHTML = hostPart + '<div class="memo-icon"></div>';
+                    windowDiv.dataset.ip = result.ip;
+                    windowDiv.addEventListener('click', () => openPopup(result.ip));
+                    resultsContainer.appendChild(windowDiv);
+                });
+                document.getElementById('loading').style.display = 'none';
+                const now = new Date();
+                document.getElementById('lastChecked').textContent = `Last checked: ${now.toLocaleTimeString()}`;
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').textContent = error.message;
+            }
+        }
+
+        function openPopup(ip) {
+            document.getElementById('popupHost').textContent = ip;
+            document.getElementById('memo').value = memos[ip] || '';
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('popup').style.display = 'block';
+        }
+
+        document.getElementById('saveMemoButton').addEventListener('click', () => {
+            const ip = document.getElementById('popupHost').textContent;
+            memos[ip] = document.getElementById('memo').value;
+            updateMemoMark(ip);
+            saveDataToCookies();
+            closePopup();
+        });
+
+        document.getElementById('closePopupButton').addEventListener('click', closePopup);
+
+        function closePopup() {
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('popup').style.display = 'none';
+        }
+
+        function updateMemoMark(ip) {
+            const window = document.querySelector(`.window[data-ip="${ip}"]`);
+            if (window) {
+                if (memos[ip]) {
+                    window.classList.add('has-memo');
+                } else {
+                    window.classList.remove('has-memo');
+                }
+            }
+        }
+
+        // クッキーからデータを読み込んで設定する
+        loadDataFromCookies();
+    </script>
+</body>
+
+</html>
