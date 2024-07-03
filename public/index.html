@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ping Test</title>
     <style>
+        /* 各ウィンドウのスタイル */
         .window {
             display: inline-block;
             width: 60px;
@@ -20,21 +21,25 @@
             cursor: pointer;
         }
 
+        /* オンライン時のスタイル */
         .window.online {
             background-color: #98FB98;
             /* PaleGreenっていうらしい */
         }
 
+        /* オフライン時のスタイル */
         .window.offline {
             background-color: #FFB6C1;
             /* LightPinkっていうらしい */
         }
 
+        /* タイムスタンプのスタイル */
         .timestamp {
             font-size: 14px;
             color: #333;
         }
 
+        /* ポップアップウィンドウのスタイル */
         .popup {
             display: none;
             position: fixed;
@@ -47,6 +52,7 @@
             z-index: 1000;
         }
 
+        /* オーバーレイのスタイル */
         .overlay {
             display: none;
             position: fixed;
@@ -58,6 +64,7 @@
             z-index: 999;
         }
 
+        /* メモアイコンのスタイル */
         .memo-icon {
             position: absolute;
             top: 2px;
@@ -69,10 +76,12 @@
             display: none;
         }
 
+        /* メモを持つウィンドウのスタイル */
         .window.has-memo .memo-icon {
             display: block;
         }
 
+        /* エラーメッセージのスタイル */
         .error {
             color: red;
             font-size: 14px;
@@ -83,6 +92,7 @@
 
 <body>
     <h1>Ping Test</h1>
+    <!-- Ping送信フォーム -->
     <form id="pingForm">
         <label for="network">Enter Network Address (e.g., 192.168.0.0):</label>
         <input type="text" id="network" name="network" required>
@@ -90,22 +100,35 @@
         <input type="text" id="subnet" name="subnet" required>
         <button type="submit">Ping</button>
     </form>
+    <!-- 定期Ping開始ボタン -->
     <button id="startButton">Start Regular Ping</button>
+    <!-- 定期Ping停止ボタン -->
     <button id="stopButton" disabled>Stop Regular Ping</button>
+    <!-- データエクスポートボタン -->
     <button id="exportButton">Export Data</button>
+    <!-- データインポートファイル選択 -->
     <input type="file" id="importFile" style="display:none;">
+    <!-- データインポートボタン -->
     <button id="importButton">Import Data</button>
+    <!-- クッキーリセットボタン -->
     <button id="resetCookiesButton">Reset Cookies</button>
     <h2>Results</h2>
+    <!-- 最後のチェック時間表示 -->
     <div id="lastChecked" class="timestamp"></div>
+    <!-- ローディング表示 -->
     <div id="loading" class="loading" style="display: none;">Pinging, please wait...</div>
+    <!-- エラーメッセージ表示 -->
     <div id="error" class="error"></div>
+    <!-- 結果表示エリア -->
     <div id="resultsContainer"></div>
 
+    <!-- メモを入力するポップアップ -->
     <div class="overlay" id="overlay"></div>
     <div class="popup" id="popup">
         <h3>Memo for <span id="popupHost"></span></h3>
         <textarea id="memo" rows="4" cols="50"></textarea><br>
+        <label for="memoColor">Select Color:</label>
+        <input type="color" id="memoColor" value="#ffff00"><br><br>
         <button id="saveMemoButton">Save Memo</button>
         <button id="closePopupButton">Close</button>
     </div>
@@ -114,12 +137,14 @@
         let intervalId;
         const memos = {};
 
+        // フォーム送信時にPingを実行し、結果を保存する
         document.getElementById('pingForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             await performPing();
             saveDataToCookies();
         });
 
+        // 定期的なPingを開始するボタンのクリックイベント
         document.getElementById('startButton').addEventListener('click', () => {
             const interval = prompt('Enter the interval in seconds:', '60');
             if (interval && !isNaN(interval) && interval > 0) {
@@ -129,12 +154,14 @@
             }
         });
 
+        // 定期的なPingを停止するボタンのクリックイベント
         document.getElementById('stopButton').addEventListener('click', () => {
             clearInterval(intervalId);
             document.getElementById('startButton').disabled = false;
             document.getElementById('stopButton').disabled = true;
         });
 
+        // データをエクスポートするボタンのクリックイベント
         document.getElementById('exportButton').addEventListener('click', () => {
             const data = {
                 network: document.getElementById('network').value,
@@ -151,10 +178,12 @@
             document.body.removeChild(a);
         });
 
+        // データをインポートするボタンのクリックイベント
         document.getElementById('importButton').addEventListener('click', () => {
             document.getElementById('importFile').click();
         });
 
+        // ファイル選択時にデータを読み込み、Pingを実行する
         document.getElementById('importFile').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (file) {
@@ -168,6 +197,7 @@
             }
         });
 
+        // クッキーをリセットするボタンのクリックイベント
         document.getElementById('resetCookiesButton').addEventListener('click', () => {
             resetCookies();
             document.getElementById('network').value = '';
@@ -176,6 +206,7 @@
             document.getElementById('resultsContainer').innerHTML = '';
         });
 
+        // データをクッキーに保存する関数
         function saveDataToCookies() {
             const data = {
                 network: document.getElementById('network').value,
@@ -185,6 +216,7 @@
             document.cookie = `pingData=${encodeURIComponent(JSON.stringify(data))}; path=/; max-age=31536000`; // 1 year
         }
 
+        // クッキーからデータを読み込む関数
         function loadDataFromCookies() {
             const cookies = document.cookie.split(';');
             for (let cookie of cookies) {
@@ -199,10 +231,12 @@
             }
         }
 
+        // クッキーをリセットする関数
         function resetCookies() {
             document.cookie = 'pingData=; path=/; max-age=0';
         }
 
+        // Pingを実行し、結果を表示する関数
         async function performPing() {
             document.getElementById('loading').style.display = 'block';
             document.getElementById('error').textContent = '';
@@ -228,10 +262,12 @@
                     const windowDiv = document.createElement('div');
                     windowDiv.className = 'window ' + (result.status.toLowerCase());
                     const hostPart = result.ip.replace(networkPrefix, '');
+                    windowDiv.innerHTML = hostPart + '<div class="memo-icon"></div>';
                     if (memos[result.ip]) {
                         windowDiv.classList.add('has-memo');
+                        const memoIcon = windowDiv.querySelector('.memo-icon');
+                        memoIcon.style.backgroundColor = memos[result.ip].color;
                     }
-                    windowDiv.innerHTML = hostPart + '<div class="memo-icon"></div>';
                     windowDiv.dataset.ip = result.ip;
                     windowDiv.addEventListener('click', () => openPopup(result.ip));
                     resultsContainer.appendChild(windowDiv);
@@ -245,33 +281,44 @@
             }
         }
 
+        // ポップアップを開く関数
         function openPopup(ip) {
             document.getElementById('popupHost').textContent = ip;
-            document.getElementById('memo').value = memos[ip] || '';
+            document.getElementById('memo').value = memos[ip]?.text || '';
+            document.getElementById('memoColor').value = memos[ip]?.color || '#ffff00';
             document.getElementById('overlay').style.display = 'block';
             document.getElementById('popup').style.display = 'block';
         }
 
+        // メモを保存するボタンのクリックイベント
         document.getElementById('saveMemoButton').addEventListener('click', () => {
             const ip = document.getElementById('popupHost').textContent;
-            memos[ip] = document.getElementById('memo').value;
+            memos[ip] = {
+                text: document.getElementById('memo').value,
+                color: document.getElementById('memoColor').value
+            };
             updateMemoMark(ip);
             saveDataToCookies();
             closePopup();
         });
 
+        // ポップアップを閉じるボタンのクリックイベント
         document.getElementById('closePopupButton').addEventListener('click', closePopup);
 
+        // ポップアップを閉じる関数
         function closePopup() {
             document.getElementById('overlay').style.display = 'none';
             document.getElementById('popup').style.display = 'none';
         }
 
+        // メモのマークを更新する関数
         function updateMemoMark(ip) {
             const window = document.querySelector(`.window[data-ip="${ip}"]`);
             if (window) {
-                if (memos[ip]) {
+                const memoIcon = window.querySelector('.memo-icon');
+                if (memos[ip].text) {
                     window.classList.add('has-memo');
+                    memoIcon.style.backgroundColor = memos[ip].color;
                 } else {
                     window.classList.remove('has-memo');
                 }
